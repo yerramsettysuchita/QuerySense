@@ -15,7 +15,7 @@ router = APIRouter()
 _DEMO_QUERIES = [
     {
         "query_text": "SELECT u.*, o.*, p.* FROM users u JOIN orders o ON u.id = o.user_id JOIN products p ON o.product_id = p.id WHERE u.is_active = true ORDER BY o.created_at DESC LIMIT 100",
-        "avg_exec_time_ms": 3450.0, "max_exec_time_ms": 9200.0, "calls": 12400, "db_type": "postgresql", "is_anomaly": True,
+        "avg_exec_time_ms": 4800.0, "max_exec_time_ms": 11200.0, "calls": 12400, "db_type": "postgresql", "is_anomaly": True,
     },
     {
         "query_text": "SELECT e.*, u.name, u.email FROM events e JOIN users u ON e.user_id = u.id WHERE e.created_at >= NOW() - INTERVAL '7 days' AND e.event_type IN ('purchase','refund','chargeback')",
@@ -72,7 +72,7 @@ _DEMO_RECS = {
             "description": "The query joins users→orders→products without an index on user_id. A composite index eliminates the sequential scan and covers the ORDER BY clause.",
             "sql_fix": "CREATE INDEX CONCURRENTLY idx_orders_user_created\nON orders(user_id, created_at DESC);",
             "estimated_improvement_pct": 85.0, "risk_level": "low", "confidence": 0.97,
-            "ai_explanation": "Sequential scan on orders detected. 12,400 calls/day means this scan runs constantly. A composite index on (user_id, created_at DESC) will reduce query time by ~85% by eliminating the sort and enabling index-only scans.",
+            "ai_explanation": "Sequential scan on orders detected. 12,400 calls/day at 4,800ms average means this scan dominates database load. A composite index on (user_id, created_at DESC) will reduce query time by ~96% by eliminating the sort and enabling index-only scans.",
         },
         {
             "rec_type": "index",
@@ -159,7 +159,7 @@ _DEMO_AGENT = {
             "run_shadow_benchmark",
             "apply_index_concurrently",
         ]),
-        "outcome": "Index idx_orders_user_created applied successfully. Query time reduced from 3,450ms → 185ms (94.6% improvement). Monitoring for 24h to confirm stability.",
+        "outcome": "Index idx_orders_user_created applied successfully. Query time reduced from 4,800ms → 185ms (96.1% improvement). Monitoring for 24h to confirm stability.",
     },
     1: {
         "decision": "escalate",
@@ -367,7 +367,7 @@ def seed_demo(db: Session = Depends(get_app_db), current_user: dict = Depends(ge
 
     # ── 6. Benchmark results (properly linked to real recommendation IDs) ─────
     _BENCHMARK_SPECS = [
-        {"q_idx": 0, "r_idx": 0, "before_ms": 3450.0, "after_ms": 185.0, "improvement_pct": 94.6, "iterations": 100},
+        {"q_idx": 0, "r_idx": 0, "before_ms": 4800.0, "after_ms": 185.0, "improvement_pct": 96.1, "iterations": 100},
         {"q_idx": 2, "r_idx": 0, "before_ms": 1920.0, "after_ms": 290.0, "improvement_pct": 84.9, "iterations": 50},
     ]
 
