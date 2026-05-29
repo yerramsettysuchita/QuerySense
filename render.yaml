@@ -1,0 +1,157 @@
+databases:
+  - name: querysense-main-db
+    plan: free
+    databaseName: querysense_main
+    user: querysense
+
+  - name: querysense-shadow-db
+    plan: free
+    databaseName: querysense_shadow
+    user: querysense
+
+  - name: querysense-app-db
+    plan: free
+    databaseName: querysense_app
+    user: querysense
+
+services:
+  - type: redis
+    name: querysense-redis
+    plan: free
+    ipAllowList: []
+
+  - type: web
+    name: querysense-backend
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --loop uvloop
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: MAIN_DB_URL
+        fromDatabase:
+          name: querysense-main-db
+          property: connectionString
+      - key: SHADOW_DB_URL
+        fromDatabase:
+          name: querysense-shadow-db
+          property: connectionString
+      - key: APP_DB_URL
+        fromDatabase:
+          name: querysense-app-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: querysense-redis
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: SLACK_WEBHOOK_URL
+        sync: false
+      - key: SLACK_ALERTS_ENABLED
+        value: "false"
+      - key: SLOW_QUERY_THRESHOLD_MS
+        value: "500"
+      - key: POLL_INTERVAL_SECONDS
+        value: "30"
+      - key: ANOMALY_STDDEV_MULTIPLIER
+        value: "2.0"
+
+  - type: worker
+    name: querysense-celery-worker
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.core.celery_app worker --loglevel=info --concurrency=2
+    plan: starter
+    envVars:
+      - key: MAIN_DB_URL
+        fromDatabase:
+          name: querysense-main-db
+          property: connectionString
+      - key: SHADOW_DB_URL
+        fromDatabase:
+          name: querysense-shadow-db
+          property: connectionString
+      - key: APP_DB_URL
+        fromDatabase:
+          name: querysense-app-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: querysense-redis
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+
+  - type: worker
+    name: querysense-celery-beat
+    env: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.core.celery_app beat --loglevel=info
+    plan: starter
+    envVars:
+      - key: MAIN_DB_URL
+        fromDatabase:
+          name: querysense-main-db
+          property: connectionString
+      - key: SHADOW_DB_URL
+        fromDatabase:
+          name: querysense-shadow-db
+          property: connectionString
+      - key: APP_DB_URL
+        fromDatabase:
+          name: querysense-app-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: querysense-redis
+          property: connectionString
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        sync: false
+
+  - type: web
+    name: querysense-frontend
+    env: node
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    plan: free
+    envVars:
+      # Server-side proxy destination — auto-populated from the backend service URL
+      - key: BACKEND_URL
+        fromService:
+          type: web
+          name: querysense-backend
+          envVarKey: RENDER_EXTERNAL_URL
+      # Client code uses relative paths (empty) so the proxy above handles routing
+      - key: NEXT_PUBLIC_API_URL
+        value: ""
+      # WebSocket URL — set manually: wss://<your-backend>.onrender.com
+      - key: NEXT_PUBLIC_WS_URL
+        sync: false

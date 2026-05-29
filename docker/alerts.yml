@@ -1,0 +1,37 @@
+groups:
+  - name: querysense
+    rules:
+      - alert: HighAnomalyRate
+        expr: rate(querysense_anomalies_detected_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High anomaly detection rate"
+          description: "More than 0.5 anomalies/sec detected in last 5 minutes"
+
+      - alert: ActiveSlowQueriesSpike
+        expr: querysense_active_slow_queries > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Too many unresolved slow queries"
+          description: "{{ $value }} slow queries currently active"
+
+      - alert: OpenRouterHighErrorRate
+        expr: rate(querysense_openrouter_calls_total{status="error"}[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OpenRouter API failing"
+          description: "High error rate on OpenRouter calls — agent may be degraded"
+
+      - alert: BackendDown
+        expr: up{job="querysense_backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "QuerySense backend is down"

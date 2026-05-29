@@ -1,0 +1,31 @@
+name: QuerySense CI Check
+
+on: [pull_request]
+
+jobs:
+  query-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check slow queries
+        run: |
+          # Add your queries here — one curl per critical query
+          RESULT=$(curl -s -X POST ${{ secrets.QUERYSENSE_URL }}/api/v1/ci/check \
+            -H "Content-Type: application/json" \
+            -d '{
+              "query": "SELECT u.name, COUNT(o.id) FROM users u LEFT JOIN orders o ON u.id = o.user_id GROUP BY u.id",
+              "context": "PR-${{ github.event.pull_request.number }}",
+              "fail_on_seq_scan": true,
+              "fail_threshold_ms": 1000
+            }')
+
+          echo "$RESULT" | python3 -c "
+          import json, sys
+          r = json.load(sys.stdin)
+          print('Badge:', r['badge'])
+          print('Issues:', len(r['issues']))
+          if not r['passed']:
+              print('Fail reasons:', r['fail_reasons'])
+              sys.exit(1)
+          "
