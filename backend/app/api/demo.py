@@ -234,9 +234,11 @@ def seed_demo(db: Session = Depends(get_app_db), current_user: dict = Depends(ge
         db.execute(text("""
             INSERT INTO slow_queries
                 (id, connection_id, query_fingerprint, query_text,
-                 avg_exec_time_ms, max_exec_time_ms, calls, db_type, is_anomaly, detected_at)
+                 avg_exec_time_ms, max_exec_time_ms, calls, db_type,
+                 is_anomaly, is_resolved, detected_at)
             VALUES
-                (:id, :conn_id, :fp, :query, :avg, :max, :calls, :db_type, :anomaly, :detected_at)
+                (:id, :conn_id, :fp, :query, :avg, :max, :calls, :db_type,
+                 :anomaly, 0, :detected_at)
         """), {
             "id": sq_id, "conn_id": conn_id, "fp": fp,
             "query": q["query_text"], "avg": q["avg_exec_time_ms"],

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from pydantic import BaseModel
 from sqlalchemy import text
-from app.db.session import AppSessionLocal
+from sqlalchemy.orm import Session
+from app.db.session import AppSessionLocal, get_app_db
 from app.services.shadow import run_benchmark
 from app.core.logging import logger
 from app.core.deps import get_current_user
@@ -109,23 +110,26 @@ def mark_applied(recommendation_id: str, current_user: dict = Depends(get_curren
 
 
 @router.get("/history")
-def benchmark_history(limit: int = 20, current_user: dict = Depends(get_current_user)):
-    with AppSessionLocal() as db:
-        rows = db.execute(text("""
-            SELECT
-                br.id,
-                br.before_ms,
-                br.after_ms,
-                br.improvement_pct,
-                br.iterations,
-                br.tested_at,
-                qr.title,
-                qr.rec_type,
-                sq.query_text
-            FROM benchmark_results br
-            JOIN query_recommendations qr ON br.recommendation_id = qr.id
-            JOIN slow_queries sq ON qr.slow_query_id = sq.id
-            ORDER BY br.tested_at DESC
-            LIMIT :limit
-        """), {"limit": limit}).fetchall()
-        return [dict(r._mapping) for r in rows]
+def benchmark_history(
+    limit: int = 20,
+    db: Session = Depends(get_app_db),
+    current_user: dict = Depends(get_current_user),
+):
+    rows = db.execute(text("""
+        SELECT
+            br.id,
+            br.before_ms,
+            br.after_ms,
+            br.improvement_pct,
+            br.iterations,
+            br.tested_at,
+            qr.title,
+            qr.rec_type,
+            sq.query_text
+        FROM benchmark_results br
+        JOIN query_recommendations qr ON br.recommendation_id = qr.id
+        JOIN slow_queries sq ON qr.slow_query_id = sq.id
+        ORDER BY br.tested_at DESC
+        LIMIT :limit
+    """), {"limit": limit}).fetchall()
+    return [dict(r._mapping) for r in rows]

@@ -148,34 +148,25 @@ def test_seed_agent_decision_accessible(client, auth_headers):
 
 # ── Clear ─────────────────────────────────────────────────────────────────────
 
-def test_clear_removes_demo_connection(client, auth_headers, db_session):
+def test_clear_removes_demo_connection(client, auth_headers):
     client.post("/api/v1/demo/seed", headers=auth_headers)
     client.delete("/api/v1/demo/clear", headers=auth_headers)
-    row = db_session.execute(
-        text("SELECT id FROM db_connections WHERE name = 'Demo Database' LIMIT 1")
-    ).fetchone()
-    assert row is None
+    # Re-seeding must insert 12 fresh queries — proves the connection was fully removed
+    resp = client.post("/api/v1/demo/seed", headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["seeded"] == 12
 
 
-def test_clear_removes_slow_queries(client, auth_headers, db_session):
+def test_clear_removes_slow_queries(client, auth_headers):
     client.post("/api/v1/demo/seed", headers=auth_headers)
 
-    # Count queries belonging to demo connection before clear
-    before = db_session.execute(text("""
-        SELECT COUNT(*) FROM slow_queries sq
-        JOIN db_connections dc ON sq.connection_id = dc.id
-        WHERE dc.name = 'Demo Database'
-    """)).scalar()
-    assert before >= 12
+    before = client.get("/api/v1/queries/slow?limit=50", headers=auth_headers).json()
+    assert len(before) >= 12
 
     client.delete("/api/v1/demo/clear", headers=auth_headers)
 
-    after = db_session.execute(text("""
-        SELECT COUNT(*) FROM slow_queries sq
-        JOIN db_connections dc ON sq.connection_id = dc.id
-        WHERE dc.name = 'Demo Database'
-    """)).scalar()
-    assert after == 0
+    after = client.get("/api/v1/queries/slow?limit=50", headers=auth_headers).json()
+    assert len(after) == 0
 
 
 def test_clear_is_idempotent(client, auth_headers):
